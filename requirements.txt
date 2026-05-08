@@ -1,0 +1,14 @@
+pillow>=10.0
+numpy>=1.24
+# Modern Tk theme (native .app UI).
+customtkinter>=5.2
+# Web UI alternative.
+gradio==4.44.1
+
+# Optional, for the "diffusion regeneration" advanced image mode.
+# Uncomment to install; these pull ~2-3 GB of model weights on first run.
+# torch>=2.2
+# diffusers>=0.30
+# transformers>=4.40
+# accelerate>=0.30
+# safetensors>=0.4

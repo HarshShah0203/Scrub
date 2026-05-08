@@ -1,0 +1,388 @@
+{
+  "cases": [
+    {
+      "case": "image_light",
+      "mode": "clean",
+      "strength": "light",
+      "detail": "image strength=light noise=0.8sigma scale=0.99 jitter<=2px jpegQ=95 double=False",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.jpg",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/image_light/sample_clean.jpg",
+      "src_size": 977,
+      "out_size": 1188,
+      "before": {
+        "exif": {
+          "Software": "Gen AI Tool v1.0",
+          "Artist": "Jane Doe",
+          "ImageDescription": "HIDDEN_CLIENT_INFO"
+        },
+        "info_keys": [
+          "dpi",
+          "exif",
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "after": {
+        "exif": {},
+        "info_keys": [
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "pixel_delta": {
+        "shape_match": true,
+        "shape": [
+          90,
+          160,
+          3
+        ],
+        "mean_abs_delta": 0.671,
+        "max_delta": 3,
+        "pct_pixels_changed": 100.0
+      }
+    },
+    {
+      "case": "image_medium",
+      "mode": "clean",
+      "strength": "medium",
+      "detail": "image strength=medium noise=1.8sigma scale=0.97 jitter<=3px jpegQ=92 double=False",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.jpg",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/image_medium/sample_clean.jpg",
+      "src_size": 977,
+      "out_size": 572,
+      "before": {
+        "exif": {
+          "Software": "Gen AI Tool v1.0",
+          "Artist": "Jane Doe",
+          "ImageDescription": "HIDDEN_CLIENT_INFO"
+        },
+        "info_keys": [
+          "dpi",
+          "exif",
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "after": {
+        "exif": {},
+        "info_keys": [
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "pixel_delta": {
+        "shape_match": true,
+        "shape": [
+          90,
+          160,
+          3
+        ],
+        "mean_abs_delta": 1.533,
+        "max_delta": 6,
+        "pct_pixels_changed": 100.0
+      }
+    },
+    {
+      "case": "image_strong",
+      "mode": "clean",
+      "strength": "strong",
+      "detail": "image strength=strong noise=3.2sigma scale=0.93 jitter<=6px jpegQ=88 double=True",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.jpg",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/image_strong/sample_clean.jpg",
+      "src_size": 977,
+      "out_size": 711,
+      "before": {
+        "exif": {
+          "Software": "Gen AI Tool v1.0",
+          "Artist": "Jane Doe",
+          "ImageDescription": "HIDDEN_CLIENT_INFO"
+        },
+        "info_keys": [
+          "dpi",
+          "exif",
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "after": {
+        "exif": {},
+        "info_keys": [
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "pixel_delta": {
+        "shape_match": true,
+        "shape": [
+          90,
+          160,
+          3
+        ],
+        "mean_abs_delta": 1.727,
+        "max_delta": 8,
+        "pct_pixels_changed": 100.0
+      }
+    },
+    {
+      "case": "image_metaonly",
+      "mode": "metadata_only",
+      "strength": "medium",
+      "detail": "Pillow re-save (metadata dropped)",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.jpg",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/image_metaonly/sample_clean.jpg",
+      "src_size": 977,
+      "out_size": 869,
+      "before": {
+        "exif": {
+          "Software": "Gen AI Tool v1.0",
+          "Artist": "Jane Doe",
+          "ImageDescription": "HIDDEN_CLIENT_INFO"
+        },
+        "info_keys": [
+          "dpi",
+          "exif",
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "after": {
+        "exif": {},
+        "info_keys": [
+          "jfif",
+          "jfif_density",
+          "jfif_unit",
+          "jfif_version"
+        ]
+      },
+      "pixel_delta": {
+        "shape_match": true,
+        "shape": [
+          90,
+          160,
+          3
+        ],
+        "mean_abs_delta": 0.0,
+        "max_delta": 0,
+        "pct_pixels_changed": 0.0
+      }
+    },
+    {
+      "case": "video_medium",
+      "mode": "clean",
+      "strength": "medium",
+      "detail": "video strength=medium noise=6 scale=0.97 crop=4px hqdn3d=0.8:0.8:3:3 v=libx265 a=aac",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.mp4",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/video_medium/sample_clean.mp4",
+      "src_size": 15029,
+      "out_size": 28213,
+      "before": {
+        "format_tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2avc1mp41",
+          "title": "MYTITLE",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {
+            "language": "und",
+            "handler_name": "VideoHandler",
+            "vendor_id": "[0][0][0][0]",
+            "encoder": "Lavc62.11.100 libx264"
+          },
+          {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        ],
+        "codecs": [
+          "h264",
+          "aac"
+        ]
+      },
+      "after": {
+        "format_tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2mp41",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {
+            "language": "und",
+            "handler_name": "VideoHandler",
+            "vendor_id": "[0][0][0][0]",
+            "encoder": "Lavc62.11.100 libx265"
+          },
+          {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        ],
+        "codecs": [
+          "hevc",
+          "aac"
+        ]
+      }
+    },
+    {
+      "case": "video_metaonly",
+      "mode": "metadata_only",
+      "strength": "medium",
+      "detail": "ffmpeg remux (stream copy, metadata dropped)",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.mp4",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/video_metaonly/sample_clean.mp4",
+      "src_size": 15029,
+      "out_size": 14998,
+      "before": {
+        "format_tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2avc1mp41",
+          "title": "MYTITLE",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {
+            "language": "und",
+            "handler_name": "VideoHandler",
+            "vendor_id": "[0][0][0][0]",
+            "encoder": "Lavc62.11.100 libx264"
+          },
+          {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        ],
+        "codecs": [
+          "h264",
+          "aac"
+        ]
+      },
+      "after": {
+        "format_tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2avc1mp41",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {
+            "language": "und",
+            "handler_name": "VideoHandler",
+            "vendor_id": "[0][0][0][0]"
+          },
+          {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        ],
+        "codecs": [
+          "h264",
+          "aac"
+        ]
+      }
+    },
+    {
+      "case": "audio_medium",
+      "mode": "clean",
+      "strength": "medium",
+      "detail": "audio strength=medium hp=30 lp=18500 vol=0.996 codec_swap=.mp3->.m4a",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.mp3",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/audio_medium/sample_clean.m4a",
+      "src_size": 49613,
+      "out_size": 35987,
+      "before": {
+        "format_tags": {
+          "title": "SECRET_AUDIO",
+          "artist": "NOBODY",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {}
+        ],
+        "codecs": [
+          "mp3"
+        ]
+      },
+      "after": {
+        "format_tags": {
+          "major_brand": "M4A ",
+          "minor_version": "512",
+          "compatible_brands": "M4A isomiso2",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        ],
+        "codecs": [
+          "aac"
+        ]
+      }
+    },
+    {
+      "case": "audio_metaonly",
+      "mode": "metadata_only",
+      "strength": "medium",
+      "detail": "ffmpeg remux (stream copy, metadata dropped)",
+      "src": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/in/sample.mp3",
+      "out": "/Users/harshshah/Desktop/Experiments/AI-INVSIBLE-WATERMARK-REMOVER-AND-METADATA-REMOVER/test_run/out/audio_metaonly/sample_clean.mp4",
+      "src_size": 49613,
+      "out_size": 49967,
+      "before": {
+        "format_tags": {
+          "title": "SECRET_AUDIO",
+          "artist": "NOBODY",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {}
+        ],
+        "codecs": [
+          "mp3"
+        ]
+      },
+      "after": {
+        "format_tags": {
+          "major_brand": "isom",
+          "minor_version": "512",
+          "compatible_brands": "isomiso2mp41",
+          "encoder": "Lavf62.3.100"
+        },
+        "stream_tags": [
+          {
+            "language": "und",
+            "handler_name": "SoundHandler",
+            "vendor_id": "[0][0][0][0]"
+          }
+        ],
+        "codecs": [
+          "mp3"
+        ]
+      }
+    }
+  ],
+  "issues": []
+}
