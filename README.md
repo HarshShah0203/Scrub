@@ -3,18 +3,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#quick-start)
+[![GitHub stars](https://img.shields.io/github/stars/HarshShah0203/Scrub?style=social)](https://github.com/HarshShah0203/Scrub/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/HarshShah0203/Scrub?style=social)](https://github.com/HarshShah0203/Scrub/network/members)
 
-Local, offline toolkit for **metadata hygiene** and **watermark-robustness experiments** on media you own.
+Local, offline **EXIF / C2PA / Content Credentials** cleanup for images, video, and audio — plus research-style tools for studying invisible watermark robustness (including SynthID-class mid-band carriers discussed in public literature). Nothing leaves your machine.
 
 Scrub can:
 
-- Strip common metadata (EXIF / IPTC / XMP) and attempt best-effort cleanup of C2PA / Content Credentials–style containers
+- Strip common metadata (EXIF / IPTC / XMP) and attempt best-effort cleanup of C2PA-style containers
 - Heuristically inpaint small corner “AI badge” marks when they look like UI sparkles
-- Apply public-research-style spatial / spectral transforms that may **degrade** invisible watermark-like signals
+- Apply public-research spatial / spectral transforms that may **degrade** watermark-like signals
 
-Nothing is uploaded. Originals are left untouched; outputs are written beside them.
+Originals are left untouched; outputs are written beside them.
 
-> Use only on media you have rights to modify. See [NOTICE.md](NOTICE.md) for scope, trademarks, and limitations.
+> Use only on media you have rights to modify. See [NOTICE.md](NOTICE.md).
 
 <p align="center">
   <img src="docs/before-after.jpg" alt="Illustrative before/after processing example" width="720" />
@@ -54,14 +56,14 @@ python3 -m venv .venv
 |---|---|
 | Metadata | Clears EXIF / IPTC / XMP / many container tags; best-effort C2PA/JUMBF scrub |
 | Visible badges | Optional heuristic inpaint of compact high-contrast corner marks |
-| Invisible signals | Optional spectral + spatial transforms from public attack literature |
+| Invisible signals | Optional spectral + spatial transforms from public research |
 | Audit | Optional `*_audit.json` noting what was attempted |
 
-Transforms are **best-effort**. Names of commercial watermark systems below are used only as shorthand for *publicly discussed signal families* — see the disclaimer.
+Transforms are **best-effort**. Product names below are shorthand for publicly discussed signal families — see [NOTICE.md](NOTICE.md).
 
 | Signal family (public discussion) | Typical transforms here |
 |---|---|
-| Mid-band pixel carriers | FFT dampening, noise, mild JPEG |
+| Mid-band pixel carriers (e.g. SynthID-class) | FFT dampening, noise, mild JPEG |
 | Frequency / latent-style marks | Resize cycle, crop/pad, FFT |
 | Small corner UI badges | Detect + soft inpaint |
 | Audio spectral masks | Resample, filters, codec swap |
@@ -94,10 +96,10 @@ out_path, detail = clean_file(
 ## Limitations
 
 - No cryptographic guarantee; detectors are probabilistic and change over time
-- No proprietary codebook or vendor API is used or reverse-engineered here
+- No proprietary codebook or vendor API is used here
 - Pixel-identical reconstruction is not a goal
 - Video spectral pass skips clips longer than 90s (ffmpeg chain still runs)
-- **Only process media you own or have explicit rights to modify**
+- Only process media you own or have explicit rights to modify
 
 ## Layout
 
@@ -109,20 +111,20 @@ out_path, detail = clean_file(
 | `c2pa_strip.py` | Best-effort C2PA / JUMBF scrub |
 | `audit_report.py` | Before/after JSON |
 | `tk_app.py` / `app.py` | Native + Gradio UIs |
-| `NOTICE.md` | Intended use, trademarks, liability |
+| `NOTICE.md` | Scope and trademarks |
 
 ## Research lineage
 
-Implementation ideas draw on public research and discussion, including:
-
 1. Hu et al. (2024), *Stable Signature is Unstable* — [arXiv:2405.07145](https://arxiv.org/abs/2405.07145)
 2. Broader regeneration / signal-processing watermark-robustness literature
-3. Community analyses of mid-band carriers (including projects such as [Synthid-Bypass](https://github.com/00quebec/Synthid-Bypass))
-4. Vendor documentation of watermarking concepts, e.g. [DeepMind SynthID](https://deepmind.google/models/synthid/) (reference only; no affiliation)
+3. Community analyses of mid-band carriers (e.g. [Synthid-Bypass](https://github.com/00quebec/Synthid-Bypass))
+4. [DeepMind SynthID](https://deepmind.google/models/synthid/) docs (reference only; no affiliation)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Keep claims honest; do not add uploaders, telemetry, or “guaranteed bypass” language.
+PRs welcome — detectors, longer-video performance, Windows packaging, tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+If Scrub is useful, a **star** or **fork** helps others find a local offline option.
 
 ## License
 
