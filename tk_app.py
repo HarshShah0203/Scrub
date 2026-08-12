@@ -32,9 +32,7 @@ from origin_detect import detect_origin
 
 APP_NAME = "Scrub"
 SUPPORTED_EXTS = sorted(IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS)
-DEFAULT_OUT = os.path.expanduser(
-    "~/Desktop/Experiments/CREATED-DATA/METADATA-WATERMARK-REMOVED-VIDEO/PHOTO"
-)
+DEFAULT_OUT = os.path.expanduser("~/Desktop/Scrub")
 CONFIG_PATH = os.path.join(
     os.path.expanduser("~"),
     ".scrub_config.json",
