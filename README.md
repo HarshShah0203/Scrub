@@ -1,19 +1,24 @@
 # Scrub
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/HarshShah0203/Scrub?display_name=tag)](https://github.com/HarshShah0203/Scrub/releases/latest)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#install--run)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#quick-start)
 [![Offline](https://img.shields.io/badge/privacy-100%25%20offline-brightgreen.svg)](#why-scrub)
 [![GitHub stars](https://img.shields.io/github/stars/HarshShah0203/Scrub?style=social)](https://github.com/HarshShah0203/Scrub/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/HarshShah0203/Scrub?style=social)](https://github.com/HarshShah0203/Scrub/network/members)
 
-### Free. Local. Offline. Remove AI watermarks & metadata — no $2/image cloud tax.
+### Free. Local. Offline. Remove SynthID / AI watermarks & metadata — no $2/image cloud tax.
 
-**Scrub** strips EXIF / C2PA / Content Credentials and degrades invisible AI watermarks (**Google SynthID**, Kling, Veo, Sora, AudioSeal, …) on **images, video, and audio**. Nothing leaves your machine.
+**Scrub** is a free open-source **SynthID remover**, **C2PA / Content Credentials stripper**, and **EXIF metadata scrubber** that runs 100% on your machine. Degrade invisible AI watermarks (**Google SynthID**, Kling, Veo, Sora, AudioSeal, …) on **images, video, and audio**. Nothing is uploaded.
 
-> People pay [deletesynthid.com](https://deletesynthid.com/) and [removesynthid.io](https://removesynthid.io/) for this. Scrub does it **free, inspectable, and fully offline**.
+> Looking for a free alternative to [deletesynthid.com](https://deletesynthid.com/) or [removesynthid.io](https://removesynthid.io/)? Scrub does the same job — **free, inspectable, fully offline**.
 
-**If this saves you money or teaches you how “invisible” watermarks actually fail — ⭐ star the repo and fork it.**
+<p align="center">
+  <img src="docs/before-after.jpg" alt="Scrub before/after — local offline SynthID and metadata cleanup" width="720" />
+</p>
+
+**⭐ Star · 🍴 Fork · share** if this saves you money or shows how “invisible” watermarks fail. Ready-to-post copy: [SHARE.md](SHARE.md).
 
 ---
 
@@ -139,7 +144,11 @@ If Scrub replaces a paid “remove SynthID” tab for you:
 
 1. **Star** the repo so others find a free offline option  
 2. **Fork** if you want to extend or harden it  
-3. Tell creators who are about to buy credits  
+3. Tell creators who are about to buy credits — paste from [SHARE.md](SHARE.md) (HN / Reddit / X)
+
+```text
+git clone https://github.com/HarshShah0203/Scrub.git
+```
 
 ## License
 

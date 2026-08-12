@@ -1,0 +1,34 @@
+name: Feature or bug
+description: Suggest an improvement or report a problem with Scrub
+title: "[Scrub] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping grow a **free, local, offline** SynthID/C2PA scrubber.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type
+      options:
+        - Bug
+        - Feature request
+        - Docs / discoverability
+        - Packaging (Windows / Mac app)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / what do you want
+      description: Steps, OS, UI (Tk vs Gradio), and sample media type if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: want
+    attributes:
+      label: Ideal outcome
+      description: e.g. Windows .exe, longer video spectral, better sparkle detector
+    validations:
+      required: false
