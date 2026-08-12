@@ -2,68 +2,63 @@
 
 **Free, local, offline** tool that strips removable metadata and degrades invisible AI watermarks from images, video, and audio.
 
-Nothing leaves your Mac. No cloud. No credits. No $2/image.
+Nothing leaves your machine. No cloud. No credits. No $2/image.
 
-People currently pay cloud services (e.g. [deletesynthid.com](https://deletesynthid.com/), [removesynthid.io](https://removesynthid.io/)) for single-purpose SynthID cleanup. Scrub does that locally — and also handles video, audio, C2PA/EXIF/XMP, and several other watermark families.
+People currently pay services (e.g. [deletesynthid.com](https://deletesynthid.com/), [removesynthid.io](https://removesynthid.io/)) for SynthID + C2PA cleanup. Scrub covers that job **fully offline** — images, video, audio, visible Gemini sparkles, adaptive spectral attack, and before/after audit. Cloud SaaS is intentionally out of scope for an open-source local tool.
+
+## Feature parity (local vs paid)
+
+| Capability | Paid tools | Scrub (local) |
+|---|---|---|
+| Invisible SynthID-class disruption | Yes | Yes — adaptive FFT carrier detection + spatial chain |
+| C2PA / JUMBF / EXIF / XMP strip | Yes | Yes — Pillow re-save **+ deep C2PA segment scrub** |
+| Visible Gemini / Nano Banana sparkle | deletesynthid | Yes — corner badge detect + inpaint |
+| Scan → clean → verify | Marketing UX | Yes — `*_audit.json` sidecar |
+| Images (JPEG/PNG/WebP/HEIC/AVIF) | Yes | Yes |
+| Video frame frequency pass | removesynthid | Yes on clips ≤90s (else ffmpeg spatial chain) |
+| Audio (SynthID-Audio / AudioSeal) | Rare | Yes |
+| Diffusion regeneration | Some cloud pipelines | Optional local SD-Turbo img2img |
+| Upload to someone else’s servers | Often required | **Never** |
+| Price | Credits / $ | Free (MIT) |
 
 ## What it does
 
-1. **Strips removable metadata** — EXIF, IPTC, XMP, JPEG `info`, MP4/MOV container tags, C2PA manifests, etc.
-2. **Attacks invisible watermarks** with a signal-processing chain whose steps are each documented in the watermark-attack literature.
+1. **Strips removable metadata** — EXIF, IPTC, XMP, container tags, C2PA/JUMBF boxes.
+2. **Removes visible AI badges** — Gemini / Nano Banana corner sparkle when detected.
+3. **Attacks invisible watermarks** — adaptive spectral carrier dampening (open stand-in for proprietary “spectral codebooks”) + spatial literature attacks.
+4. **Writes an audit** — origin tags + metadata on input vs output.
 
-| Family | Examples | Attack used here | Expected effect |
-|---|---|---|---|
-| Pixel-noise carriers | **Google SynthID** (Imagen, Gemini / Nano Banana) | Additive Gaussian noise + mild smoothing + resize cycle + JPEG round-trip | Detector confidence typically drops below threshold |
-| Latent / frequency-domain | Stable-Signature, Tree-Ring, DCT watermarks | Scale-cycle via Lanczos + sub-pixel crop/pad | Disrupts spectral coefficients the detector keys on |
-| JPEG/DCT quant-table | Older IPTC-style DCT watermarks | JPEG round-trip at a new quality + 4:2:0 | Re-quantizes mid-frequency coefficients |
-| Audio spectral mask | **SynthID-Audio**, **Meta AudioSeal** | Resample 48→44.1→48 + mild filters + codec swap | Crushes masked bins; forces a clean bitstream |
-| Per-frame video | **Kling**, **Veo**, **Sora** | ffmpeg noise + scale-cycle + crop/pad + re-encode | Destroys per-frame carriers and bitstream signatures |
+| Family | Examples | Attack used here |
+|---|---|---|
+| Pixel-noise carriers | **Google SynthID** | Adaptive mid-band carrier damp + phase jitter + spatial/JPEG |
+| Latent / frequency-domain | Stable-Signature, Tree-Ring | Scale-cycle + FFT carriers + crop/pad |
+| Visible corner badges | Gemini sparkle | Heuristic detect + soft inpaint |
+| Audio spectral mask | SynthID-Audio, AudioSeal | Resample + filters + codec swap |
+| Per-frame video | Kling, Veo, Sora | Optional per-frame spectral (≤90s) + ffmpeg chain |
 
 ## Honest limitations
 
-- Detectors are probabilistic. “Effective” means confidence pushed below the threshold on current public detectors — not a cryptographic guarantee. Future detectors may be harder.
-- Pixel changes are tiny (e.g. JPEG q≈92 + Gaussian σ≈2) but measurable with LPIPS.
-- Optional **diffusion regeneration** (Stable-Diffusion-Turbo img2img on Apple Silicon MPS) is the strongest known local attack against SynthID. Off by default; ~2–3 GB weights on first use.
-- Use only on content you own or have the right to modify. Do not use this to misrepresent origin or commit fraud.
+- Detectors are probabilistic — not a cryptographic guarantee.
+- Adaptive carriers are estimated **per file** (no downloaded fingerprint DB).
+- We do not claim byte-identical pixels.
+- Video spectral frame pass skips clips longer than 90s (still runs the ffmpeg attack).
+- Use only on content you own or have the right to modify.
 
 ## Install + run (macOS)
-
-### Prerequisites
 
 ```bash
 brew install ffmpeg python@3.12 python-tk@3.12
 ```
 
-### Launch
-
-Double-click `run.command` in Finder. First launch builds a `.venv`, installs deps, and opens the native app.
-
-Or manually:
+Double-click `run.command`, or:
 
 ```bash
 /opt/homebrew/bin/python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python tk_app.py          # native UI
-# or
-.venv/bin/python app.py             # browser UI → http://127.0.0.1:7860
+.venv/bin/python tk_app.py
 ```
 
-### Optional: install as a Mac app
-
-```bash
-.venv/bin/python scripts/build_app.py --install
-```
-
-Then open via Spotlight: **Scrub**.
-
-## Using the app
-
-1. **Add files…** — images, video, or audio (batch OK).
-2. Pick an **output folder**.
-3. **Mode**: *Metadata + invisible watermarks* (recommended) or *Metadata only*.
-4. **Strength**: Light / Medium / Strong (or leave auto on).
-5. Optional: **diffusion regeneration** for images (needs `torch` + `diffusers`).
-6. **Start** — cleaned copies land with a `_clean` suffix. Originals are never modified.
+Optional Mac app: `.venv/bin/python scripts/build_app.py --install`
 
 ## Programmatic use
 
@@ -73,8 +68,10 @@ from watermark_remover import clean_file
 out_path, detail = clean_file(
     input_path="/path/to/image.jpg",
     output_dir="/path/to/out",
-    strength="medium",      # "light" | "medium" | "strong"
-    use_diffusion=False,
+    strength="medium",
+    use_spectral=True,
+    remove_visible=True,
+    write_audit=True,
 )
 ```
 
@@ -82,23 +79,22 @@ out_path, detail = clean_file(
 
 | File | Role |
 |---|---|
-| `watermark_remover.py` | Image / video / audio attack pipelines |
+| `watermark_remover.py` | Image / video / audio pipelines |
+| `spectral_attack.py` | Adaptive FFT carrier detection + multi-pass dampening |
+| `visible_mark.py` | Gemini / Nano Banana corner-badge inpaint |
+| `c2pa_strip.py` | Deep JPEG/PNG/ISOBMFF C2PA·JUMBF scrub |
+| `audit_report.py` | Before/after provenance JSON |
 | `stripper.py` | Metadata-only pipeline |
-| `origin_detect.py` | Heuristic origin / provenance hints |
-| `tk_app.py` | Native Mac UI (default) |
-| `app.py` | Gradio browser UI |
-| `run.command` | Double-click Finder launcher |
-| `scripts/build_app.py` | Builds `Scrub.app` |
+| `origin_detect.py` | Origin / provenance heuristics |
+| `tk_app.py` / `app.py` | Native + Gradio UIs |
 
-## Why open source this?
+## Research lineage
 
-Cloud “remove SynthID” products charge per image and upload your files to someone else’s servers. Scrub is the opposite: free, inspectable, and fully offline. If you were about to buy credits for a one-off cleanup, clone this instead.
-
-## References
-
-1. Hu et al. (2024), *Stable Signature is Unstable*. [arXiv:2405.07145](https://arxiv.org/abs/2405.07145)
-2. Google DeepMind, [SynthID](https://deepmind.google/models/synthid/)
-3. [00quebec/Synthid-Bypass](https://github.com/00quebec/Synthid-Bypass) (ComfyUI-based diffusion approach)
+1. Hu et al. (2024), *Stable Signature is Unstable* — [arXiv:2405.07145](https://arxiv.org/abs/2405.07145)
+2. Regeneration / diffusion removal attacks (Zhao et al. and follow-ons)
+3. [00quebec/Synthid-Bypass](https://github.com/00quebec/Synthid-Bypass)
+4. Community spectral analyses of SynthID carriers (motivate adaptive FFT dampening)
+5. Google DeepMind, [SynthID](https://deepmind.google/models/synthid/)
 
 ## License
 
@@ -106,4 +102,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Ethics
 
-Released as defensive / research tooling so people can evaluate how robust “invisible” watermarks actually are. Don’t use it to commit fraud or strip marks from work you don’t own.
+Defensive / research tooling. Don’t use it to commit fraud or strip marks from work you don’t own.

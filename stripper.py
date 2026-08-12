@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Any, Dict
 
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".avif"}
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mpeg", ".mpg", ".ogv"}
 AUDIO_EXTS = {".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".oga", ".opus", ".wma"}
 
@@ -79,6 +79,17 @@ def get_tool_versions() -> Dict[str, Any]:
 def _strip_image_with_pillow(input_path: str, output_dir: str) -> StripResult:
     from PIL import Image
 
+    ext = _ext_lower(input_path)
+    if ext in {".heic", ".heif", ".avif"}:
+        try:
+            from pillow_heif import register_heif_opener  # type: ignore
+            register_heif_opener()
+        except Exception as e:
+            raise RuntimeError(
+                "HEIC/HEIF/AVIF support requires pillow-heif. "
+                f"pip install pillow-heif ({e})"
+            )
+
     img = Image.open(input_path)
 
     # Copy pixel data into a new image container and drop info dict to avoid
@@ -91,7 +102,10 @@ def _strip_image_with_pillow(input_path: str, output_dir: str) -> StripResult:
         pass
 
     in_ext = _ext_lower(input_path)
-    out_ext = in_ext if in_ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"} else ".png"
+    if in_ext in {".heic", ".heif", ".avif"}:
+        out_ext = ".jpg"
+    else:
+        out_ext = in_ext if in_ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"} else ".png"
     out_path = _unique_path(os.path.join(output_dir, os.path.splitext(os.path.basename(input_path))[0] + "_clean" + out_ext))
 
     fmt = None
@@ -109,8 +123,18 @@ def _strip_image_with_pillow(input_path: str, output_dir: str) -> StripResult:
     else:
         fmt = img.format
 
+    if fmt == "JPEG" and img2.mode not in ("RGB", "L"):
+        img2 = img2.convert("RGB")
     img2.save(out_path, format=fmt)
-    return StripResult(output_path=out_path, detail="Pillow re-save (metadata dropped)")
+    detail = "Pillow re-save (metadata dropped)"
+    try:
+        from c2pa_strip import deep_strip_c2pa_file
+        c2pa_detail, n = deep_strip_c2pa_file(out_path)
+        if n:
+            detail += f"; {c2pa_detail}"
+    except Exception:
+        pass
+    return StripResult(output_path=out_path, detail=detail)
 
 
 def _strip_media_with_ffmpeg(

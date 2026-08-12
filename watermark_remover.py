@@ -45,12 +45,14 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageEnhance
 
 from origin_detect import OriginReport, detect_origin
+from spectral_attack import spectral_attack_image, spectral_strength_for
+from visible_mark import remove_visible_marks
 
 
 Strength = Literal["near_lossless", "light", "medium", "strong"]
 
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".avif"}
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mpeg", ".mpg", ".ogv"}
 AUDIO_EXTS = {".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".oga", ".opus", ".wma"}
 
@@ -268,16 +270,40 @@ def _attack_image_array(img: Image.Image, p: dict, rng: random.Random) -> Image.
     return stage
 
 
+def _open_image(input_path: str) -> Image.Image:
+    """Open an image, registering HEIC/HEIF/AVIF via pillow-heif when available."""
+    ext = _ext_lower(input_path)
+    if ext in {".heic", ".heif", ".avif"}:
+        try:
+            from pillow_heif import register_heif_opener  # type: ignore
+
+            register_heif_opener()
+        except Exception as e:
+            raise RuntimeError(
+                "HEIC/HEIF/AVIF support requires pillow-heif. "
+                "Install with: pip install pillow-heif. "
+                f"Import error: {e}"
+            )
+    return Image.open(input_path)
+
+
 def attack_image(
     input_path: str,
     output_dir: str,
     strength: Strength = "near_lossless",
     force_jpeg_roundtrip: bool = True,
     seed: Optional[int] = None,
+    use_spectral: bool = True,
+    remove_visible: bool = True,
 ) -> AttackResult:
     """
     Run the image watermark-attack chain and save an output with metadata
     dropped (Pillow re-save discards EXIF/info by default here).
+
+    Order (matches paid-tool feature set):
+      1. optional visible corner-badge inpaint (Gemini sparkle)
+      2. optional mid-band FFT spectral disruption (SynthID-class carriers)
+      3. spatial signal-processing chain (noise / scale / jitter / JPEG)
 
     force_jpeg_roundtrip = True will, for JPEG outputs, write+read back through
     a JPEG buffer at the preset quality; this re-quantizes every mid-freq DCT
@@ -289,7 +315,7 @@ def attack_image(
     if seed is not None:
         np.random.seed(seed & 0xFFFFFFFF)
 
-    img = Image.open(input_path)
+    img = _open_image(input_path)
     # Respect EXIF orientation before we drop metadata, so "upright" stays upright.
     try:
         from PIL import ImageOps
@@ -298,12 +324,44 @@ def attack_image(
     except Exception:
         pass
 
+    extras: list[str] = []
+
+    if remove_visible:
+        img, hits = remove_visible_marks(img)
+        if hits:
+            extras.append(
+                "visible_mark=" + ",".join(f"{h.corner}:{h.score:.0f}" for h in hits)
+            )
+        else:
+            extras.append("visible_mark=none")
+
+    fidelity_first = strength == "near_lossless"
+    if use_spectral:
+        spec_s = spectral_strength_for(strength)
+        img, spec_stats = spectral_attack_image(
+            img,
+            strength=spec_s,
+            seed=None if seed is None else (seed + 17),
+            fidelity_first=fidelity_first,
+        )
+        extras.append(
+            f"spectral={spec_s}/carriers={spec_stats.get('carrier_bins_y', 0)}"
+            + ("/fidelity" if fidelity_first else "")
+        )
+
+    # Near-lossless: spectral already did the heavy lifting — keep spatial soft.
     out = _attack_image_array(img, p, rng)
     if p["double_pass"]:
         out = _attack_image_array(out, p, rng)
 
     in_ext = _ext_lower(input_path)
-    out_ext = in_ext if in_ext in IMAGE_EXTS else ".png"
+    # Re-encode HEIC/HEIF/AVIF as JPEG — broad compatibility.
+    if in_ext in {".heic", ".heif", ".avif"}:
+        out_ext = ".jpg"
+    elif in_ext in IMAGE_EXTS:
+        out_ext = in_ext
+    else:
+        out_ext = ".png"
     base = os.path.splitext(os.path.basename(input_path))[0]
     out_path = _unique(os.path.join(output_dir, base + "_clean" + out_ext))
 
@@ -346,11 +404,23 @@ def attack_image(
 
     out.save(out_path, format=fmt, **save_kwargs)
 
+    # Belt-and-suspenders: scrub any C2PA/JUMBF containers that survived save.
+    try:
+        from c2pa_strip import deep_strip_c2pa_file
+
+        c2pa_detail, n_c2pa = deep_strip_c2pa_file(out_path)
+        if n_c2pa:
+            extras.append(c2pa_detail)
+    except Exception as e:
+        extras.append(f"c2pa_strip_skipped={e}")
+
     detail = (
         f"image strength={strength} noise={p['noise_sigma']}sigma "
         f"scale={p['scale_factor']:.2f} jitter<={p['jitter_max_px']}px "
         f"jpegQ={p['jpeg_quality']} double={p['double_pass']}"
     )
+    if extras:
+        detail += " | " + " ".join(extras)
     return AttackResult(output_path=out_path, detail=detail)
 
 
@@ -419,6 +489,157 @@ def attack_video(
     input_path: str,
     output_dir: str,
     strength: Strength = "near_lossless",
+    use_spectral: bool = False,
+) -> AttackResult:
+    """
+    Run the video watermark-attack chain via ffmpeg.
+    Always re-encodes (stream-copy would keep the watermarked pixels).
+    Metadata is dropped via -map_metadata -1.
+
+    If use_spectral=True and the clip is short enough, each frame also gets
+    the adaptive FFT carrier attack (paid browser removers' frame-by-frame
+    frequency pass). Long clips fall back to the ffmpeg spatial chain only.
+    """
+    spectral_note = ""
+    work_input = input_path
+    tmp_spectral = None
+    if use_spectral:
+        try:
+            work_input, spectral_note = _spectral_preprocess_video(
+                input_path, output_dir, strength=strength,
+            )
+            if work_input != input_path:
+                tmp_spectral = work_input
+        except Exception as e:
+            spectral_note = f"spectral_frames_skipped={e}"
+            work_input = input_path
+
+    try:
+        res = _attack_video_ffmpeg(work_input, output_dir, strength=strength)
+    finally:
+        if tmp_spectral and os.path.exists(tmp_spectral):
+            try:
+                os.remove(tmp_spectral)
+            except Exception:
+                pass
+
+    detail = res.detail
+    if spectral_note:
+        detail += " | " + spectral_note
+    try:
+        from c2pa_strip import deep_strip_c2pa_file
+        c2pa_detail, n = deep_strip_c2pa_file(res.output_path)
+        if n:
+            detail += " | " + c2pa_detail
+    except Exception:
+        pass
+    return AttackResult(output_path=res.output_path, detail=detail)
+
+
+def _probe_duration_sec(path: str) -> float:
+    probe = _probe_streams(path)
+    try:
+        return float((probe.get("format") or {}).get("duration") or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _spectral_preprocess_video(
+    input_path: str,
+    output_dir: str,
+    strength: Strength,
+    max_seconds: float = 90.0,
+) -> tuple[str, str]:
+    """
+    Frame-extract → adaptive spectral → temp mp4. Returns (path, note).
+    Skips when duration exceeds max_seconds (keeps OSS local UX snappy).
+    """
+    import tempfile
+
+    dur = _probe_duration_sec(input_path)
+    if dur > max_seconds:
+        return input_path, f"spectral_frames=skipped(duration={dur:.1f}s>{max_seconds:.0f}s)"
+
+    spec_s = spectral_strength_for(strength)
+    fidelity_first = strength == "near_lossless"
+    tmpdir = tempfile.mkdtemp(prefix="scrub_vframes_")
+    pattern = os.path.join(tmpdir, "f_%06d.png")
+    try:
+        _run([
+            FFMPEG, "-y", "-i", input_path,
+            "-map_metadata", "-1",
+            "-vsync", "0",
+            pattern,
+        ])
+        frames = sorted(
+            f for f in os.listdir(tmpdir) if f.endswith(".png")
+        )
+        if not frames:
+            return input_path, "spectral_frames=none"
+        carriers = 0
+        for name in frames:
+            fp = os.path.join(tmpdir, name)
+            im = Image.open(fp)
+            out, stats = spectral_attack_image(
+                im, strength=spec_s, fidelity_first=fidelity_first, seed=None,
+            )
+            carriers += int(stats.get("carrier_bins_y") or 0)
+            out.convert("RGB").save(fp, format="PNG", optimize=True)
+
+        tmp_mp4 = os.path.join(
+            output_dir,
+            os.path.splitext(os.path.basename(input_path))[0] + "_spectral_tmp.mp4",
+        )
+        # Rebuild video from frames; copy audio from source if present.
+        cmd = [
+            FFMPEG, "-y",
+            "-framerate", "30",
+            "-i", pattern,
+            "-i", input_path,
+            "-map", "0:v:0", "-map", "1:a:0?",
+            "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k",
+            "-shortest",
+            "-map_metadata", "-1",
+            tmp_mp4,
+        ]
+        # Prefer source framerate when probeable.
+        probe = _probe_streams(input_path)
+        fps = None
+        for stm in (probe.get("streams") or []):
+            if stm.get("codec_type") == "video":
+                rate = stm.get("avg_frame_rate") or stm.get("r_frame_rate")
+                if rate and rate != "0/0":
+                    try:
+                        a, b = rate.split("/")
+                        fps = float(a) / float(b) if float(b) else None
+                    except Exception:
+                        fps = None
+                break
+        if fps and fps > 1:
+            cmd[cmd.index("-framerate") + 1] = str(round(fps, 3))
+
+        _run(cmd)
+        note = f"spectral_frames={len(frames)}/{spec_s}/carriers~{carriers}"
+        return tmp_mp4, note
+    finally:
+        # Clean extracted frames.
+        try:
+            for name in os.listdir(tmpdir):
+                try:
+                    os.remove(os.path.join(tmpdir, name))
+                except Exception:
+                    pass
+            os.rmdir(tmpdir)
+        except Exception:
+            pass
+
+
+def _attack_video_ffmpeg(
+    input_path: str,
+    output_dir: str,
+    strength: Strength = "near_lossless",
 ) -> AttackResult:
     """
     Run the video watermark-attack chain via ffmpeg.
@@ -431,6 +652,12 @@ def attack_video(
 
     # Keep the container if common, else fall back to mp4.
     target_ext = in_ext if in_ext in {".mp4", ".mov", ".m4v", ".mkv", ".webm"} else ".mp4"
+    # Spectral preprocess writes .mp4 temps — keep requested extension from basename caller.
+    if "_spectral_tmp" in base:
+        base = base.replace("_spectral_tmp", "")
+        # Prefer mp4 for intermediate-sourced cleans unless original was webm/mkv —
+        # caller passes original output_dir; use mp4 as safe default for tmp source.
+        target_ext = ".mp4"
     out_path = _unique(os.path.join(output_dir, base + "_clean" + target_ext))
 
     # Probe the source first so we can pin the output dimensions to the
@@ -772,6 +999,7 @@ class CleanReport:
     strength_used: Strength
     auto_escalated: bool
     origin: Optional[OriginReport] = None
+    audit_path: Optional[str] = None
 
 
 def _resolve_strength(
@@ -811,22 +1039,21 @@ def clean_file(
     strength: Strength = "near_lossless",
     use_diffusion: bool = False,
     auto_strength: bool = True,
+    use_spectral: bool = True,
+    remove_visible: bool = True,
+    write_audit: bool = True,
 ) -> Tuple[str, str]:
     """
     Strip metadata AND attack invisible watermarks in one call.
 
-    - Images: single pass through `attack_image`, which also writes without
-      metadata (Pillow re-save with info={} on save).
+    - Images: visible-mark inpaint → spectral FFT → spatial chain (or diffusion).
     - Video/audio: ffmpeg pipeline that re-encodes with watermark attack
       filters AND drops all container/stream metadata (-map_metadata -1).
 
     If `auto_strength=True` (the default), the strength is auto-escalated to
     at least "medium" for media whose metadata signals a robustly-watermarked
-    origin (Google Imagen/Gemini, Veo, Kling, Sora, AudioSeal, …). This lets
-    casual uploads stay near-lossless while still defeating SynthID-style
-    marks when the source is known.
+    origin (Google Imagen/Gemini, Veo, Kling, Sora, AudioSeal, …).
     """
-    ext = _ext_lower(input_path)
     if not os.path.exists(input_path):
         raise FileNotFoundError(input_path)
     os.makedirs(output_dir, exist_ok=True)
@@ -835,6 +1062,8 @@ def clean_file(
         input_path=input_path, output_dir=output_dir,
         strength=strength, use_diffusion=use_diffusion,
         auto_strength=auto_strength,
+        use_spectral=use_spectral, remove_visible=remove_visible,
+        write_audit=write_audit,
     )
     return report.output_path, report.detail
 
@@ -845,6 +1074,9 @@ def clean_file_v2(
     strength: Strength = "near_lossless",
     use_diffusion: bool = False,
     auto_strength: bool = True,
+    use_spectral: bool = True,
+    remove_visible: bool = True,
+    write_audit: bool = True,
 ) -> CleanReport:
     """Structured variant of `clean_file` that returns a `CleanReport`."""
     ext = _ext_lower(input_path)
@@ -858,41 +1090,86 @@ def clean_file_v2(
     if escalated and origin and origin.matches:
         prefix = f"auto-escalated ({'+'.join(origin.matches)}) -> {chosen}; "
 
+    def _finish(res: AttackResult, detail: str) -> CleanReport:
+        audit_path = None
+        full_detail = prefix + detail
+        if write_audit:
+            try:
+                from audit_report import write_clean_audit
+
+                audit_path = write_clean_audit(
+                    input_path, res.output_path, full_detail,
+                    extra={
+                        "use_spectral": use_spectral,
+                        "remove_visible": remove_visible,
+                        "use_diffusion": use_diffusion,
+                    },
+                )
+                full_detail = full_detail + f" | audit={os.path.basename(audit_path)}"
+            except Exception as e:
+                full_detail = full_detail + f" | audit_failed={e}"
+        return CleanReport(
+            output_path=res.output_path,
+            detail=full_detail,
+            strength_used=chosen, auto_escalated=escalated, origin=origin,
+            audit_path=audit_path,
+        )
+
     if ext in IMAGE_EXTS:
         if use_diffusion:
             try:
-                res = diffusion_regen_image(input_path, output_dir)
-                return CleanReport(
-                    output_path=res.output_path,
-                    detail=prefix + res.detail + " + signal-chain-skipped",
-                    strength_used=chosen, auto_escalated=escalated, origin=origin,
-                )
+                pre = input_path
+                tmp_pre = None
+                if remove_visible:
+                    try:
+                        img = _open_image(input_path)
+                        try:
+                            from PIL import ImageOps
+                            img = ImageOps.exif_transpose(img)
+                        except Exception:
+                            pass
+                        cleaned_vis, hits = remove_visible_marks(img)
+                        if hits:
+                            tmp_pre = os.path.join(
+                                output_dir,
+                                os.path.splitext(os.path.basename(input_path))[0]
+                                + "_pre_visible.png",
+                            )
+                            cleaned_vis.convert("RGB").save(tmp_pre, format="PNG")
+                            pre = tmp_pre
+                    except Exception:
+                        pre = input_path
+                res = diffusion_regen_image(pre, output_dir)
+                if tmp_pre and os.path.exists(tmp_pre):
+                    try:
+                        os.remove(tmp_pre)
+                    except Exception:
+                        pass
+                return _finish(res, res.detail + " + signal-chain-skipped")
             except Exception as e:
-                sig = attack_image(input_path, output_dir, strength=chosen)
-                return CleanReport(
-                    output_path=sig.output_path,
-                    detail=prefix + f"diffusion path unavailable ({e}); fell back to signal-chain: {sig.detail}",
-                    strength_used=chosen, auto_escalated=escalated, origin=origin,
+                sig = attack_image(
+                    input_path, output_dir, strength=chosen,
+                    use_spectral=use_spectral, remove_visible=remove_visible,
                 )
-        res = attack_image(input_path, output_dir, strength=chosen)
-        return CleanReport(
-            output_path=res.output_path, detail=prefix + res.detail,
-            strength_used=chosen, auto_escalated=escalated, origin=origin,
+                return _finish(
+                    sig,
+                    f"diffusion path unavailable ({e}); fell back to signal-chain: {sig.detail}",
+                )
+        res = attack_image(
+            input_path, output_dir, strength=chosen,
+            use_spectral=use_spectral, remove_visible=remove_visible,
         )
+        return _finish(res, res.detail)
 
     if ext in VIDEO_EXTS:
-        res = attack_video(input_path, output_dir, strength=chosen)
-        return CleanReport(
-            output_path=res.output_path, detail=prefix + res.detail,
-            strength_used=chosen, auto_escalated=escalated, origin=origin,
+        res = attack_video(
+            input_path, output_dir, strength=chosen, use_spectral=use_spectral,
         )
+        return _finish(res, res.detail)
 
     if ext in AUDIO_EXTS:
         res = attack_audio(input_path, output_dir, strength=chosen)
-        return CleanReport(
-            output_path=res.output_path, detail=prefix + res.detail,
-            strength_used=chosen, auto_escalated=escalated, origin=origin,
-        )
+        return _finish(res, res.detail)
 
     raise ValueError(f"Unsupported file type: {ext} ({os.path.basename(input_path)})")
 

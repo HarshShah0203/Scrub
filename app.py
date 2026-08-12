@@ -104,6 +104,9 @@ def process_uploads(
     auto: bool,
     strength: str,
     use_diffusion: bool,
+    use_spectral: bool,
+    remove_visible: bool,
+    write_audit: bool,
 ):
     if not files:
         return [], "No files uploaded.", ""
@@ -142,8 +145,13 @@ def process_uploads(
                 strength=strength_key,
                 use_diffusion=use_diffusion,
                 auto_strength=bool(auto),
+                use_spectral=bool(use_spectral),
+                remove_visible=bool(remove_visible),
+                write_audit=bool(write_audit),
             )
             cleaned.append(report.output_path)
+            if report.audit_path:
+                cleaned.append(report.audit_path)
             log_lines.append(
                 f"OK  {name} -> {os.path.basename(report.output_path)}  ({report.detail})"
             )
@@ -170,9 +178,9 @@ def main():
         gr.HTML(
             """
 <div id="app-header">
-  <h1>Metadata &amp; invisible-watermark cleaner</h1>
-  <p>Strip EXIF, IPTC, XMP, C2PA manifests, and invisible AI watermarks
-     (SynthID, Kling, Veo, Sora, AudioSeal, …). Fully local —
+  <h1>Scrub</h1>
+  <p>Strip EXIF, IPTC, XMP, C2PA, visible Gemini sparkles, and invisible AI
+     watermarks (SynthID, Kling, Veo, Sora, AudioSeal, …). Fully local —
      your originals are never modified.</p>
 </div>
 """
@@ -188,7 +196,7 @@ def main():
         with gr.Group(elem_classes="card"):
             output_dir = gr.Textbox(
                 label="Output folder",
-                placeholder="/Users/yourname/Desktop/Experiments/CREATED-DATA/...",
+                placeholder="~/Desktop/Scrub",
                 value=initial_output_dir,
             )
             set_default = gr.Button("Set as default directory")
@@ -209,6 +217,18 @@ def main():
                 ["Near-lossless", "Light", "Medium", "Strong"],
                 value="Near-lossless",
                 label="Manual strength (used when Auto is off)",
+            )
+            use_spectral = gr.Checkbox(
+                value=True,
+                label="Spectral / frequency-domain SynthID attack (images + short video ≤90s)",
+            )
+            remove_visible = gr.Checkbox(
+                value=True,
+                label="Remove visible Gemini / Nano Banana sparkle",
+            )
+            write_audit = gr.Checkbox(
+                value=True,
+                label="Write before/after audit JSON",
             )
             use_diffusion = gr.Checkbox(
                 value=False,
@@ -250,7 +270,8 @@ def main():
 
         go.click(
             fn=process_uploads,
-            inputs=[files_in, output_dir, mode, auto, strength, use_diffusion],
+            inputs=[files_in, output_dir, mode, auto, strength,
+                    use_diffusion, use_spectral, remove_visible, write_audit],
             outputs=[cleaned, log, summary, results],
         )
 

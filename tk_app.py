@@ -82,6 +82,9 @@ class App(ctk.CTk):
         self.auto_var = tk.BooleanVar(value=True)
         self.mode_var = tk.StringVar(value="full")
         self.diffusion_var = tk.BooleanVar(value=False)
+        self.spectral_var = tk.BooleanVar(value=True)
+        self.visible_var = tk.BooleanVar(value=True)
+        self.audit_var = tk.BooleanVar(value=True)
 
         self._build()
         self._refresh_strength_state()
@@ -112,8 +115,8 @@ class App(ctk.CTk):
         ).pack(anchor="w")
         ctk.CTkLabel(
             header,
-            text=("Strip EXIF, IPTC, XMP, C2PA manifests, and invisible AI "
-                  "watermarks (SynthID, Kling, Veo, Sora, AudioSeal, …). "
+            text=("Strip EXIF, IPTC, XMP, C2PA manifests, visible Gemini sparkles, "
+                  "and invisible AI watermarks (SynthID, Kling, Veo, Sora, AudioSeal, …). "
                   "Fully local. Originals are never modified."),
             font=ctk.CTkFont(size=13), text_color=MUTED,
             anchor="w", justify="left", wraplength=980,
@@ -422,6 +425,63 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=11), text_color=MUTED,
             wraplength=WRAP - 26, justify="left", anchor="w",
         ).grid(row=row, column=0, sticky="ew",
+               padx=(PAD_X + 26, PAD_X), pady=(3, 8))
+        row += 1
+
+        self.spectral_chk = ctk.CTkCheckBox(
+            card,
+            text="Spectral / frequency-domain SynthID attack (images + short video)",
+            variable=self.spectral_var,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            text_color=TEXT, font=ctk.CTkFont(size=12),
+        )
+        self.spectral_chk.grid(row=row, column=0, sticky="w", padx=PAD_X)
+        row += 1
+        ctk.CTkLabel(
+            card,
+            text=("Adaptive FFT carrier detection + multi-pass dampening "
+                  "(open stand-in for proprietary spectral codebooks). "
+                  "Also runs frame-by-frame on videos ≤90s."),
+            font=ctk.CTkFont(size=11), text_color=MUTED,
+            wraplength=WRAP - 26, justify="left", anchor="w",
+        ).grid(row=row, column=0, sticky="ew",
+               padx=(PAD_X + 26, PAD_X), pady=(3, 8))
+        row += 1
+
+        self.visible_chk = ctk.CTkCheckBox(
+            card,
+            text="Remove visible Gemini / Nano Banana sparkle",
+            variable=self.visible_var,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            text_color=TEXT, font=ctk.CTkFont(size=12),
+        )
+        self.visible_chk.grid(row=row, column=0, sticky="w", padx=PAD_X)
+        row += 1
+        ctk.CTkLabel(
+            card,
+            text="Detects and inpaints the small corner AI badge when present.",
+            font=ctk.CTkFont(size=11), text_color=MUTED,
+            wraplength=WRAP - 26, justify="left", anchor="w",
+        ).grid(row=row, column=0, sticky="ew",
+               padx=(PAD_X + 26, PAD_X), pady=(3, 8))
+        row += 1
+
+        self.audit_chk = ctk.CTkCheckBox(
+            card,
+            text="Write before/after audit JSON",
+            variable=self.audit_var,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            text_color=TEXT, font=ctk.CTkFont(size=12),
+        )
+        self.audit_chk.grid(row=row, column=0, sticky="w", padx=PAD_X)
+        row += 1
+        ctk.CTkLabel(
+            card,
+            text=("Sidecar `*_audit.json` lists origin tags + metadata on "
+                  "input vs cleaned output (scan → verify loop)."),
+            font=ctk.CTkFont(size=11), text_color=MUTED,
+            wraplength=WRAP - 26, justify="left", anchor="w",
+        ).grid(row=row, column=0, sticky="ew",
                padx=(PAD_X + 26, PAD_X), pady=(3, 18))
         row += 1
 
@@ -653,12 +713,16 @@ class App(ctk.CTk):
         strength = self.strength_var.get()
         auto = self.auto_var.get()
         use_diffusion = bool(self.diffusion_var.get())
+        use_spectral = bool(self.spectral_var.get())
+        remove_visible = bool(self.visible_var.get())
+        write_audit = bool(self.audit_var.get())
         self._last_out_dir = out_dir
 
         self._append_log(
             f"Starting {len(self._files)} file(s) -> {out_dir} "
             f"[mode={mode}, auto={auto}, strength={strength}, "
-            f"diffusion={use_diffusion}]"
+            f"diffusion={use_diffusion}, spectral={use_spectral}, "
+            f"visible={remove_visible}, audit={write_audit}]"
         )
 
         for p in self._files:
@@ -676,11 +740,12 @@ class App(ctk.CTk):
         threading.Thread(
             target=self._worker,
             args=(list(self._files), out_dir, mode, strength,
-                  auto, use_diffusion),
+                  auto, use_diffusion, use_spectral, remove_visible, write_audit),
             daemon=True,
         ).start()
 
-    def _worker(self, files, out_dir, mode, strength, auto, use_diffusion):
+    def _worker(self, files, out_dir, mode, strength, auto, use_diffusion,
+                use_spectral, remove_visible, write_audit):
         ok = 0
         total = max(1, len(files))
         for i, p in enumerate(files, start=1):
@@ -700,6 +765,9 @@ class App(ctk.CTk):
                         strength=strength,
                         use_diffusion=use_diffusion,
                         auto_strength=auto,
+                        use_spectral=use_spectral,
+                        remove_visible=remove_visible,
+                        write_audit=write_audit,
                     )
                     result_path = report.output_path
                     detail = report.detail
