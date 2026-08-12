@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.DS_Store
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Local app logs / config (live outside the repo, but belt-and-suspenders)
+*.log
+.scrub_config.json
+
+# Generated clean outputs from local test runs
+test_out/
+test_out2/
+test_out3/
+test_smoke/
+test_run/out/
