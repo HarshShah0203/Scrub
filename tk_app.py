@@ -66,8 +66,8 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title(APP_NAME)
-        self.geometry("1220x740")
-        self.minsize(1120, 680)
+        self.geometry("1180x720")
+        self.minsize(980, 640)
         self.configure(fg_color=APP_BG)
 
         self._files: List[str] = []
@@ -403,33 +403,18 @@ class App(ctk.CTk):
         row += 1
 
         # Advanced -------------------------------------------------------
+        # Put the common toggles first (spectral / sparkle / audit). Keep
+        # diffusion last — it is rarely used and its help text is long, so
+        # burying the everyday controls under it made them easy to miss.
         ctk.CTkLabel(card, text="ADVANCED",
                      font=ctk.CTkFont(size=10, weight="bold"),
                      text_color=MUTED).grid(
             row=row, column=0, sticky="w", padx=PAD_X, pady=(16, 4))
         row += 1
-        self.diff_chk = ctk.CTkCheckBox(
-            card,
-            text="Use diffusion regeneration for images",
-            variable=self.diffusion_var,
-            fg_color=ACCENT, hover_color=ACCENT_HOVER,
-            text_color=TEXT, font=ctk.CTkFont(size=12),
-        )
-        self.diff_chk.grid(row=row, column=0, sticky="w", padx=PAD_X)
-        row += 1
-        ctk.CTkLabel(
-            card,
-            text=("Slow; requires torch + diffusers. Produces the cleanest "
-                  "image outputs at the cost of a low-denoise img2img pass."),
-            font=ctk.CTkFont(size=11), text_color=MUTED,
-            wraplength=WRAP - 26, justify="left", anchor="w",
-        ).grid(row=row, column=0, sticky="ew",
-               padx=(PAD_X + 26, PAD_X), pady=(3, 8))
-        row += 1
 
         self.spectral_chk = ctk.CTkCheckBox(
             card,
-            text="Spectral / frequency-domain SynthID attack (images + short video)",
+            text="Spectral / frequency-domain SynthID attack",
             variable=self.spectral_var,
             fg_color=ACCENT, hover_color=ACCENT_HOVER,
             text_color=TEXT, font=ctk.CTkFont(size=12),
@@ -438,13 +423,11 @@ class App(ctk.CTk):
         row += 1
         ctk.CTkLabel(
             card,
-            text=("Adaptive FFT carrier detection + multi-pass dampening "
-                  "(open stand-in for proprietary spectral codebooks). "
-                  "Also runs frame-by-frame on videos ≤90s."),
+            text="FFT carrier detection for images + short videos (≤90s).",
             font=ctk.CTkFont(size=11), text_color=MUTED,
             wraplength=WRAP - 26, justify="left", anchor="w",
         ).grid(row=row, column=0, sticky="ew",
-               padx=(PAD_X + 26, PAD_X), pady=(3, 8))
+               padx=(PAD_X + 26, PAD_X), pady=(2, 6))
         row += 1
 
         self.visible_chk = ctk.CTkCheckBox(
@@ -456,14 +439,6 @@ class App(ctk.CTk):
         )
         self.visible_chk.grid(row=row, column=0, sticky="w", padx=PAD_X)
         row += 1
-        ctk.CTkLabel(
-            card,
-            text="Detects and inpaints the small corner AI badge when present.",
-            font=ctk.CTkFont(size=11), text_color=MUTED,
-            wraplength=WRAP - 26, justify="left", anchor="w",
-        ).grid(row=row, column=0, sticky="ew",
-               padx=(PAD_X + 26, PAD_X), pady=(3, 8))
-        row += 1
 
         self.audit_chk = ctk.CTkCheckBox(
             card,
@@ -472,16 +447,17 @@ class App(ctk.CTk):
             fg_color=ACCENT, hover_color=ACCENT_HOVER,
             text_color=TEXT, font=ctk.CTkFont(size=12),
         )
-        self.audit_chk.grid(row=row, column=0, sticky="w", padx=PAD_X)
+        self.audit_chk.grid(row=row, column=0, sticky="w", padx=PAD_X, pady=(6, 0))
         row += 1
-        ctk.CTkLabel(
+
+        self.diff_chk = ctk.CTkCheckBox(
             card,
-            text=("Sidecar `*_audit.json` lists origin tags + metadata on "
-                  "input vs cleaned output (scan → verify loop)."),
-            font=ctk.CTkFont(size=11), text_color=MUTED,
-            wraplength=WRAP - 26, justify="left", anchor="w",
-        ).grid(row=row, column=0, sticky="ew",
-               padx=(PAD_X + 26, PAD_X), pady=(3, 18))
+            text="Diffusion regeneration for images (slow; needs torch)",
+            variable=self.diffusion_var,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            text_color=TEXT, font=ctk.CTkFont(size=12),
+        )
+        self.diff_chk.grid(row=row, column=0, sticky="w", padx=PAD_X, pady=(10, 14))
         row += 1
 
         return card
@@ -720,6 +696,9 @@ class App(ctk.CTk):
             self._append_log("No files selected. Click the add panel first.")
             return
         out_dir = (self.output_dir_var.get() or "").strip()
+        if out_dir.startswith("~"):
+            out_dir = os.path.expanduser(out_dir)
+            self.output_dir_var.set(out_dir)
         if not out_dir:
             self._append_log("Choose an output folder first.")
             return
