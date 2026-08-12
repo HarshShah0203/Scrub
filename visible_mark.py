@@ -9,6 +9,7 @@ Heuristic (no ML model required):
 
   * Scan the four corners for a compact high-contrast blob on a relatively
     flat local background (typical 48×48 / 96×96 sparkle).
+  * Prefer bright minority clusters near the outer edge of the corner.
   * Build a soft mask and inpaint via neighbor averaging + edge-aware fill.
   * Conservative: if nothing looks like a badge, the image is unchanged.
 
@@ -33,10 +34,11 @@ class VisibleMarkHit:
 
 
 def _corner_rois(w: int, h: int) -> List[Tuple[str, Tuple[int, int, int, int]]]:
-    # Badge is typically ≤ ~7% of the short side, inset a few px from the edge.
+    # Gemini sparkles sit near the extreme corner; keep ROI large enough
+    # (≈15% of short side, clamped) so 48–96px badges are always inside.
     short = min(w, h)
-    box = max(48, min(160, int(short * 0.12)))
-    inset = max(2, int(short * 0.01))
+    box = max(64, min(192, int(short * 0.15)))
+    inset = max(1, int(short * 0.005))
     return [
         ("br", (w - box - inset, h - box - inset, w - inset, h - inset)),
         ("bl", (inset, h - box - inset, inset + box, h - inset)),
@@ -45,12 +47,12 @@ def _corner_rois(w: int, h: int) -> List[Tuple[str, Tuple[int, int, int, int]]]:
     ]
 
 
-def _score_badge(region: np.ndarray) -> float:
+def _score_badge(region: np.ndarray, corner: str) -> float:
     """
     Higher score → more likely a small high-contrast logo on a quieter patch.
     region: HxWx3 uint8
     """
-    if region.size == 0:
+    if region.size == 0 or region.shape[0] < 8 or region.shape[1] < 8:
         return 0.0
     gray = (
         0.299 * region[:, :, 0]
@@ -58,35 +60,65 @@ def _score_badge(region: np.ndarray) -> float:
         + 0.114 * region[:, :, 2]
     ).astype(np.float64)
 
-    # Local contrast via Laplacian-ish energy.
     gy, gx = np.gradient(gray)
     edge = np.hypot(gx, gy)
     edge_mean = float(edge.mean())
     edge_p90 = float(np.percentile(edge, 90))
+    edge_p99 = float(np.percentile(edge, 99))
 
-    # Badges tend to have a bright/dark cluster occupying a minority of pixels.
-    lo, hi = np.percentile(gray, [10, 90])
+    lo, hi = np.percentile(gray, [8, 92])
     span = float(hi - lo)
-    bright_frac = float((gray > (hi - 0.15 * max(span, 1))).mean())
-    dark_frac = float((gray < (lo + 0.15 * max(span, 1))).mean())
-    minority = min(bright_frac, 1.0 - bright_frac)
+    bright = gray >= (hi - 0.12 * max(span, 1))
+    dark = gray <= (lo + 0.12 * max(span, 1))
+    bright_frac = float(bright.mean())
+    dark_frac = float(dark.mean())
 
-    # Prefer compact high-edge minority structures; penalize busy textures.
-    if edge_mean < 2.0 or span < 18.0:
+    # Reject near-flat or fully busy (photo texture / post-noise) corners.
+    if span < 22.0 or edge_mean < 1.5:
         return 0.0
-    score = (edge_p90 / (edge_mean + 1e-3)) * span * (0.15 + minority)
-    # Extra boost when a small bright minority sits on a mid/dark field
-    # (classic white sparkle).
-    if 0.02 <= bright_frac <= 0.28 and span > 40:
-        score *= 1.35
-    if 0.02 <= dark_frac <= 0.28 and span > 40:
-        score *= 1.15
+    if edge_mean > 28.0 and (edge_p90 / (edge_mean + 1e-3)) < 1.6:
+        # Uniformly busy → likely noise/texture, not a compact badge.
+        return 0.0
+
+    # Compactness of the bright cluster (Gemini sparkles are small & bright).
+    if bright_frac < 0.008 or bright_frac > 0.42:
+        bright_compact = 0.0
+    else:
+        ys, xs = np.where(bright)
+        if ys.size < 4:
+            bright_compact = 0.0
+        else:
+            # Normalized bounding-box area vs ROI — badges are localized.
+            bb = (ys.max() - ys.min() + 1) * (xs.max() - xs.min() + 1)
+            fill = ys.size / max(bb, 1)
+            area_frac = bb / gray.size
+            bright_compact = fill * (1.0 - min(1.0, area_frac * 2.5))
+
+            # Prefer clusters near the outer corner of this ROI.
+            cy = float(ys.mean()) / max(gray.shape[0] - 1, 1)
+            cx = float(xs.mean()) / max(gray.shape[1] - 1, 1)
+            if corner == "br":
+                corner_prox = 0.5 * (cy + cx)
+            elif corner == "bl":
+                corner_prox = 0.5 * (cy + (1.0 - cx))
+            elif corner == "tr":
+                corner_prox = 0.5 * ((1.0 - cy) + cx)
+            else:
+                corner_prox = 0.5 * ((1.0 - cy) + (1.0 - cx))
+            bright_compact *= 0.55 + 0.45 * corner_prox
+
+    structure = edge_p99 / (edge_mean + 1e-3)
+    score = structure * span * (0.2 + bright_compact)
+    if 0.015 <= bright_frac <= 0.30 and span > 35 and bright_compact > 0.08:
+        score *= 1.45
+    if 0.015 <= dark_frac <= 0.30 and span > 35:
+        score *= 1.08
     return float(score)
 
 
 def detect_visible_marks(
     img: Image.Image,
-    min_score: float = 55.0,
+    min_score: float = 48.0,
 ) -> List[VisibleMarkHit]:
     rgb = np.asarray(img.convert("RGB"), dtype=np.uint8)
     h, w = rgb.shape[:2]
@@ -94,88 +126,60 @@ def detect_visible_marks(
     for name, (l, t, r, b) in _corner_rois(w, h):
         l, t = max(0, l), max(0, t)
         r, b = min(w, r), min(h, b)
-        score = _score_badge(rgb[t:b, l:r])
+        score = _score_badge(rgb[t:b, l:r], name)
         if score >= min_score:
             hits.append(VisibleMarkHit(corner=name, bbox=(l, t, r, b), score=score))
-    # Keep at most the strongest hit — Gemini stamps one sparkle.
     hits.sort(key=lambda x: x.score, reverse=True)
     return hits[:1]
 
 
 def _inpaint_bbox(rgb: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
     """
-    Soft-inpaint a bbox by expanding a mask around high-edge pixels and
-    filling from surrounding ring statistics (no OpenCV dependency).
+    Replace a detected corner-badge bbox with exterior context.
+
+    Once detection has already decided "this corner is a badge", be aggressive:
+    fill the whole ROI from the surrounding ring and feather only a few pixels
+    at the inner boundary so the seam isn't obvious.
     """
     l, t, r, b = bbox
     h, w = rgb.shape[:2]
     out = rgb.astype(np.float64).copy()
 
-    # Focus mask on the high-edge core inside the ROI rather than the whole box.
-    roi = rgb[t:b, l:r].astype(np.float64)
-    gray = 0.299 * roi[:, :, 0] + 0.587 * roi[:, :, 1] + 0.114 * roi[:, :, 2]
-    gy, gx = np.gradient(gray)
-    edge = np.hypot(gx, gy)
-    thr = float(np.percentile(edge, 70))
-    core = edge >= thr
+    pad = 8
+    L, T = max(0, l - pad), max(0, t - pad)
+    R, B = min(w, r + pad), min(h, b + pad)
+    ring = out[T:B, L:R]
+    exterior = np.ones(ring.shape[:2], dtype=bool)
+    exterior[(t - T):(b - T), (l - L):(r - L)] = False
+    if exterior.any():
+        fill = ring[exterior].mean(axis=0)
+    else:
+        fill = out[t:b, l:r].mean(axis=0)
 
-    # Dilate core a few pixels.
-    mask = core.copy()
-    for _ in range(3):
-        padded = np.pad(mask.astype(np.uint8), 1, mode="edge")
-        dil = np.zeros_like(mask, dtype=bool)
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                dil |= padded[1 + dy : 1 + dy + mask.shape[0],
-                              1 + dx : 1 + dx + mask.shape[1]].astype(bool)
-        mask = dil
+    rh, rw = b - t, r - l
+    yy, xx = np.mgrid[0:rh, 0:rw].astype(np.float64)
+    # Distance from the outer corner (badge sits there) → 0 at outer corner.
+    if l > w // 2:
+        dx = (rw - 1 - xx) / max(rw - 1, 1)
+    else:
+        dx = xx / max(rw - 1, 1)
+    if t > h // 2:
+        dy = (rh - 1 - yy) / max(rh - 1, 1)
+    else:
+        dy = yy / max(rh - 1, 1)
+    # Solid replace across almost the entire ROI; feather only the innermost rim.
+    radial = np.maximum(dx, dy)
+    alpha = np.ones((rh, rw), dtype=np.float64)
+    feather = np.clip((0.22 - radial) / 0.22, 0.0, 1.0)  # 1 at inner rim
+    alpha = 1.0 - 0.15 * feather  # still ≥0.85 everywhere
 
-    if not mask.any():
-        # Fallback: soft ellipse in the corner-most half of the ROI.
-        yy, xx = np.mgrid[0:mask.shape[0], 0:mask.shape[1]]
-        cy, cx = mask.shape[0] * 0.65, mask.shape[1] * 0.65
-        # Bias ellipse toward the outer corner depending on bbox position.
-        if l > w // 2:
-            cx = mask.shape[1] * 0.7
-        else:
-            cx = mask.shape[1] * 0.3
-        if t > h // 2:
-            cy = mask.shape[0] * 0.7
-        else:
-            cy = mask.shape[0] * 0.3
-        ry, rx = mask.shape[0] * 0.35, mask.shape[1] * 0.35
-        mask = ((yy - cy) / max(ry, 1)) ** 2 + ((xx - cx) / max(rx, 1)) ** 2 <= 1.0
+    a_img = Image.fromarray((alpha * 255).astype(np.uint8), mode="L")
+    a_img = a_img.filter(ImageFilter.GaussianBlur(radius=1.2))
+    alpha = np.asarray(a_img, dtype=np.float64) / 255.0
+    alpha = np.maximum(alpha, 0.97)
 
-    # Ring just outside the mask for fill color.
-    padded = np.pad(mask.astype(np.uint8), 2, mode="edge")
-    ring = np.zeros_like(mask, dtype=bool)
-    for dy in range(-2, 3):
-        for dx in range(-2, 3):
-            ring |= padded[2 + dy : 2 + dy + mask.shape[0],
-                           2 + dx : 2 + dx + mask.shape[1]].astype(bool)
-    ring &= ~mask
-    if not ring.any():
-        ring = ~mask
-
-    fill = roi[ring].mean(axis=0) if ring.any() else roi.mean(axis=0)
-
-    # Multi-pass pull toward neighbors outside the mask.
-    work = roi.copy()
-    for _ in range(12):
-        padded = np.pad(work, ((1, 1), (1, 1), (0, 0)), mode="edge")
-        avg = (
-            padded[0:-2, 1:-1] + padded[2:, 1:-1]
-            + padded[1:-1, 0:-2] + padded[1:-1, 2:]
-        ) / 4.0
-        # Also bias toward ring mean so busy interiors settle.
-        avg = 0.7 * avg + 0.3 * fill
-        work = np.where(mask[:, :, None], avg, work)
-
-    # Feather: blur mask and lerp.
-    mask_img = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
-    mask_img = mask_img.filter(ImageFilter.GaussianBlur(radius=2.0))
-    alpha = np.asarray(mask_img, dtype=np.float64) / 255.0
-    blended = work * alpha[:, :, None] + roi * (1.0 - alpha[:, :, None])
+    roi = out[t:b, l:r]
+    blended = fill * alpha[:, :, None] + roi * (1.0 - alpha[:, :, None])
     out[t:b, l:r] = blended
     return np.clip(out, 0, 255).astype(np.uint8)
 

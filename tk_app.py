@@ -224,9 +224,8 @@ class App(ctk.CTk):
         drop_title.grid(row=0, column=0, pady=(18, 2))
         drop_hint = ctk.CTkLabel(
             drop,
-            text="Accepts " + ", ".join(
-                sorted({e.lstrip(".") for e in SUPPORTED_EXTS})),
-            font=ctk.CTkFont(size=10), text_color=MUTED,
+            text="JPEG · PNG · WebP · HEIC · AVIF · MP4 · MOV · MP3 · WAV · …",
+            font=ctk.CTkFont(size=11), text_color=MUTED,
             wraplength=560, justify="center",
         )
         drop_hint.grid(row=1, column=0, pady=(0, 16))
@@ -597,10 +596,12 @@ class App(ctk.CTk):
             ("All files", ["*"]),
         ]
         paths = filedialog.askopenfilenames(title="Select files", filetypes=filetypes)
-        if not paths:
-            return
+        if paths:
+            self._add_paths(list(paths))
+
+    def _add_paths(self, paths: List[str]) -> None:
         for p in paths:
-            if p in self._file_rows:
+            if not p or p in self._file_rows:
                 continue
             origin = self._describe_origin(p)
             self._origin_cache[p] = origin
@@ -623,11 +624,24 @@ class App(ctk.CTk):
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 saved = (data.get("default_output_dir") or "").strip()
-                if saved:
+                if saved and self._output_dir_is_usable(saved):
                     return saved
         except Exception:
             pass
         return DEFAULT_OUT
+
+    def _output_dir_is_usable(self, path: str) -> bool:
+        """Reject empty/relative/odd paths (e.g. legacy configs with ':')."""
+        if not path or not os.path.isabs(path):
+            return False
+        # Colon in a path component is almost always a legacy Finder-style
+        # mistake on macOS and breaks mkdir for our users.
+        if any((":" in p) for p in path.split(os.sep) if p):
+            return False
+        parent = path if os.path.isdir(path) else os.path.dirname(path)
+        if not parent or not os.path.isdir(parent):
+            return False
+        return os.access(parent, os.W_OK)
 
     def _save_default_output_dir(self):
         path = (self.output_dir_var.get() or "").strip()
@@ -638,6 +652,12 @@ class App(ctk.CTk):
             os.makedirs(path, exist_ok=True)
         except Exception as e:
             self._append_log(f"Cannot save default output folder: {e}")
+            return
+        if not self._output_dir_is_usable(path):
+            self._append_log(
+                "Cannot save default: path looks invalid. "
+                "Pick a normal folder (no ':' in the name)."
+            )
             return
         try:
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:

@@ -220,6 +220,7 @@ def strip_file_metadata(
     watermarking schemes.
     """
     ext = _ext_lower(input_path)
+    os.makedirs(output_dir, exist_ok=True)
     if ext in IMAGE_EXTS:
         res = _strip_image_with_pillow(input_path, output_dir)
         return res.output_path, res.detail
