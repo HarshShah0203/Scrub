@@ -5,6 +5,8 @@ import hashlib
 from dataclasses import dataclass
 from typing import Optional, Tuple, Any, Dict
 
+from document_strip import DOC_EXTS, clean_document, inspect_document
+
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".avif"}
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mpeg", ".mpg", ".ogv"}
@@ -233,6 +235,9 @@ def strip_file_metadata(
         )
         return res.output_path, res.detail
 
+    if ext in DOC_EXTS:
+        return clean_document(input_path, output_dir)
+
     raise ValueError(f"Unsupported file type: {ext} ({os.path.basename(input_path)})")
 
 
@@ -314,6 +319,9 @@ def inspect_file(
 
         base["ffprobe"] = probe
         return base
+
+    if ext in DOC_EXTS:
+        return inspect_document(input_path)
 
     raise ValueError(f"Unsupported file type for audit: {ext} ({os.path.basename(input_path)})")
 

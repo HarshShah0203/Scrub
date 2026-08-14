@@ -5,9 +5,9 @@ set -euo pipefail
 
 REPO="${REPO:-HarshShah0203/Scrub}"
 
-DESC='Local offline metadata & C2PA cleanup for media you own, plus research tools for studying invisible watermark robustness. MIT.'
+DESC='Local offline hygiene for media & documents you own: EXIF/C2PA, hidden Unicode, plus research tools for invisible-watermark robustness. MIT.'
 HOME_URL='https://github.com/HarshShah0203/Scrub'
-TOPICS='["metadata","privacy","c2pa","exif","python","offline","research","watermark","synthid"]'
+TOPICS='["metadata","privacy","c2pa","exif","python","offline","research","watermark","synthid","unicode","pdf","docx"]'
 
 gh api "repos/${REPO}" -X PATCH \
   -f description="$DESC" \

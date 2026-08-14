@@ -32,6 +32,7 @@ from typing import Literal, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageFilter, ImageEnhance
 
+from document_strip import DOC_EXTS, clean_document
 from origin_detect import OriginReport, detect_origin
 from spectral_attack import spectral_attack_image, spectral_strength_for
 from visible_mark import remove_visible_marks
@@ -1157,13 +1158,18 @@ def clean_file_v2(
         res = attack_audio(input_path, output_dir, strength=chosen)
         return _finish(res, res.detail)
 
+    if ext in DOC_EXTS:
+        out, detail = clean_document(input_path, output_dir)
+        res = AttackResult(output_path=out, detail=detail)
+        return _finish(res, detail)
+
     raise ValueError(f"Unsupported file type: {ext} ({os.path.basename(input_path)})")
 
 
 __all__ = [
     "Strength",
     "AttackResult", "CleanReport",
-    "IMAGE_EXTS", "VIDEO_EXTS", "AUDIO_EXTS",
+    "IMAGE_EXTS", "VIDEO_EXTS", "AUDIO_EXTS", "DOC_EXTS",
     "attack_image", "attack_video", "attack_audio",
     "diffusion_regen_image",
     "clean_file", "clean_file_v2",

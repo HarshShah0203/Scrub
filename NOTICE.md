@@ -7,7 +7,7 @@
 Scrub is offered for:
 
 - **Robustness research** — studying how metadata tags and invisible watermark *signals* behave under ordinary signal-processing transforms
-- **Privacy / hygiene on media you own** — stripping EXIF and similar metadata from your own files before sharing
+- **Privacy / hygiene on media and documents you own** — stripping EXIF, document properties, and hidden Unicode from your own files before sharing
 - **Evaluating your own generative outputs** — understanding what provenance signals remain in content you created or have rights to modify
 
 ## Not intended for
@@ -25,7 +25,8 @@ If you are unsure whether a use is lawful, do not use the tool for that purpose.
 
 Scrub applies **best-effort, imperfect** transforms:
 
-- Metadata scrubbing (EXIF / IPTC / XMP / container tags, and best-effort C2PA/JUMBF cleanup)
+- Metadata scrubbing (EXIF / IPTC / XMP / container tags, document properties, and best-effort C2PA/JUMBF cleanup)
+- Deterministic Unicode hygiene (zero-width / bidi / tag characters) — not a statistical rewrite
 - Heuristic inpainting of small corner badges that *look like* common AI UI marks
 - Research-style spatial / spectral signal disruption aimed at *watermark-like* carriers discussed in public literature
 

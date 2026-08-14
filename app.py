@@ -208,17 +208,22 @@ def main():
 <div id="app-header">
   <h1>Scrub</h1>
   <p>Local metadata hygiene and watermark-robustness toolkit. Strips common
-     EXIF/IPTC/XMP/C2PA-style tags and can apply best-effort signal disruption
-     on media you own. Originals are never modified. See NOTICE.md.</p>
+     EXIF/IPTC/XMP/C2PA-style tags, hidden Unicode in documents, and can apply
+     best-effort signal disruption on media you own. Originals are never modified.
+     See NOTICE.md.</p>
 </div>
 """
         )
 
         with gr.Group(elem_classes="card"):
             files_in = gr.File(
-                label="Drop images, videos, or audio here",
+                label="Drop images, video, audio, or documents (PDF/DOCX/MD/HTML/SVG)",
                 file_count="multiple",
-                file_types=["image", "video", "audio"],
+                file_types=[
+                    "image", "video", "audio",
+                    ".pdf", ".docx", ".odt", ".svg", ".html", ".htm",
+                    ".md", ".markdown", ".txt",
+                ],
             )
 
         with gr.Group(elem_classes="card"):

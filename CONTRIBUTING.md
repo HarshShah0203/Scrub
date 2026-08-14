@@ -17,7 +17,7 @@ python3 -m venv .venv
 - Corner-badge detection edge cases
 - Faster video spectral path for clips >90s
 - Windows packaging
-- Tests for `c2pa_strip`, `spectral_attack`, `visible_mark`
+- Tests for `text_hygiene`, `document_strip`, `c2pa_strip`, `spectral_attack`, `visible_mark`
 
 When filing issues, use synthetic samples you own. Do not upload other people’s private media.
 

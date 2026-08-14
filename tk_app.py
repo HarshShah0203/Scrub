@@ -25,13 +25,14 @@ from watermark_remover import (
     IMAGE_EXTS,
     VIDEO_EXTS,
     AUDIO_EXTS,
+    DOC_EXTS,
     clean_file_v2,
 )
 from origin_detect import detect_origin
 
 
 APP_NAME = "Scrub"
-SUPPORTED_EXTS = sorted(IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS)
+SUPPORTED_EXTS = sorted(IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS | DOC_EXTS)
 DEFAULT_OUT = os.path.expanduser("~/Desktop/Scrub")
 CONFIG_PATH = os.path.join(
     os.path.expanduser("~"),
@@ -116,8 +117,8 @@ class App(ctk.CTk):
         ctk.CTkLabel(
             header,
             text=("Local metadata hygiene and watermark-robustness toolkit. "
-                  "Strips common EXIF/IPTC/XMP/C2PA-style tags and can apply "
-                  "best-effort signal disruption on media you own. "
+                  "Strips EXIF/C2PA-style tags, hidden Unicode in documents, "
+                  "and can apply best-effort signal disruption on media you own. "
                   "Originals are never modified. See NOTICE.md."),
             font=ctk.CTkFont(size=13), text_color=MUTED,
             anchor="w", justify="left", wraplength=980,
@@ -218,7 +219,7 @@ class App(ctk.CTk):
         drop.grid_propagate(False)
         drop.grid_columnconfigure(0, weight=1)
         drop_title = ctk.CTkLabel(
-            drop, text="＋  Click to add images, videos, or audio",
+            drop, text="＋  Click to add images, video, audio, or documents",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=ACCENT,
         )
@@ -565,10 +566,11 @@ class App(ctk.CTk):
     def _select_files(self):
         patterns = [f"*{e}" for e in SUPPORTED_EXTS]
         filetypes = [
-            ("Supported media", patterns),
+            ("Supported", patterns),
             ("Images", [f"*{e}" for e in IMAGE_EXTS]),
             ("Videos", [f"*{e}" for e in VIDEO_EXTS]),
             ("Audio", [f"*{e}" for e in AUDIO_EXTS]),
+            ("Documents", [f"*{e}" for e in DOC_EXTS]),
             ("All files", ["*"]),
         ]
         paths = filedialog.askopenfilenames(title="Select files", filetypes=filetypes)
